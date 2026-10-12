@@ -39,6 +39,7 @@ macro_rules! channel_methods {
 
 impl BoardShim {
     pub fn new(board_id: BoardId, params: MindRoveInputParams) -> Result<Self> {
+        internal::ensure_logging_bridge();
         let params_json = internal::to_json_cstring(&params)?;
         Ok(Self {
             board_id,
@@ -145,6 +146,7 @@ impl BoardShim {
     );
 
     pub fn get_board_presets(board_id: BoardId) -> Result<Vec<i32>> {
+        internal::ensure_logging_bridge();
         internal::read_i32_vec(|values, len| {
             internal::board_presets(board_id.as_raw(), values, len)
         })
@@ -155,6 +157,7 @@ impl BoardShim {
     }
 
     pub fn get_version() -> Result<String> {
+        internal::ensure_logging_bridge();
         let max_len = 256_i32;
         let mut buffer = vec![0_u8; max_len as usize];
         let mut len = max_len;
@@ -171,25 +174,38 @@ impl BoardShim {
     }
 
     pub fn disable_board_logger() -> Result<()> {
-        set_log_level(LogLevel::LEVEL_OFF)
+        Self::set_log_level(LogLevel::LEVEL_OFF)
     }
     pub fn enable_board_logger() -> Result<()> {
-        set_log_level(LogLevel::LEVEL_INFO)
+        Self::set_log_level(LogLevel::LEVEL_INFO)
     }
     pub fn enable_dev_board_logger() -> Result<()> {
-        set_log_level(LogLevel::LEVEL_TRACE)
+        Self::set_log_level(LogLevel::LEVEL_TRACE)
     }
 
     pub fn set_log_file(path: &str) -> Result<()> {
+        // Ensure the bridge is initialised *before* the explicit log
+        // file override so that, if the caller has already configured
+        // logging and then constructs a `BoardShim`, the explicit
+        // user-level setting wins instead of being clobbered by the
+        // bridge's automatic `set_log_file` call.
+        internal::ensure_logging_bridge();
         let path = internal::to_cstring(path)?;
         internal::check_status(internal::set_log_file(path.as_ptr()))
     }
 
     pub fn set_log_level(level: LogLevel) -> Result<()> {
+        // See `set_log_file` for the rationale: initialise the bridge
+        // before the explicit level call so the caller's value wins.
+        internal::ensure_logging_bridge();
         set_log_level(level)
     }
 
     pub fn log_message(level: LogLevel, message: &str) -> Result<()> {
+        // See `set_log_file` for the rationale: initialise the bridge
+        // before the explicit log call so it is in place before any
+        // vendor log output could arrive.
+        internal::ensure_logging_bridge();
         let mut message = internal::to_cstring(message)?.into_bytes_with_nul();
         internal::check_status(internal::logger_call(
             1,
@@ -199,11 +215,21 @@ impl BoardShim {
     }
 
     pub fn prepare_session(&mut self) -> Result<()> {
+        tracing::debug!(
+            target: "mindrove",
+            board_id = self.board_id.as_raw(),
+            "preparing session"
+        );
         internal::check_status(internal::prepare_session(
             self.board_id.as_raw(),
             self.params_json.as_ptr(),
         ))?;
         self.prepared = true;
+        tracing::info!(
+            target: "mindrove",
+            board_id = self.board_id.as_raw(),
+            "session prepared"
+        );
         Ok(())
     }
 
@@ -216,6 +242,12 @@ impl BoardShim {
         buffer_size: usize,
         streamer_params: &str,
     ) -> Result<()> {
+        tracing::debug!(
+            target: "mindrove",
+            board_id = self.board_id.as_raw(),
+            buffer_size,
+            "starting stream"
+        );
         let buffer_size = internal::checked_native_capacity(buffer_size)?;
         let streamer_params = internal::to_cstring(streamer_params)?;
         internal::check_status(internal::start_stream(
@@ -225,15 +257,30 @@ impl BoardShim {
             self.params_json.as_ptr(),
         ))?;
         self.streaming = true;
+        tracing::info!(
+            target: "mindrove",
+            board_id = self.board_id.as_raw(),
+            "stream started"
+        );
         Ok(())
     }
 
     pub fn stop_stream(&mut self) -> Result<()> {
+        tracing::debug!(
+            target: "mindrove",
+            board_id = self.board_id.as_raw(),
+            "stopping stream"
+        );
         internal::check_status(internal::stop_stream(
             self.board_id.as_raw(),
             self.params_json.as_ptr(),
         ))?;
         self.streaming = false;
+        tracing::debug!(
+            target: "mindrove",
+            board_id = self.board_id.as_raw(),
+            "stream stopped"
+        );
         Ok(())
     }
 
@@ -248,12 +295,22 @@ impl BoardShim {
     }
 
     pub fn release_session(&mut self) -> Result<()> {
+        tracing::debug!(
+            target: "mindrove",
+            board_id = self.board_id.as_raw(),
+            "releasing session"
+        );
         internal::check_status(internal::release_session(
             self.board_id.as_raw(),
             self.params_json.as_ptr(),
         ))?;
         self.prepared = false;
         self.streaming = false;
+        tracing::info!(
+            target: "mindrove",
+            board_id = self.board_id.as_raw(),
+            "session released"
+        );
         Ok(())
     }
 
@@ -377,11 +434,25 @@ impl BoardShim {
 
 impl Drop for BoardShim {
     fn drop(&mut self) {
-        if self.streaming {
-            let _ = self.stop_stream();
+        if self.streaming
+            && let Err(err) = self.stop_stream()
+        {
+            tracing::warn!(
+                target: "mindrove",
+                board_id = self.board_id.as_raw(),
+                error = %err,
+                "BoardShim drop stop_stream failed"
+            );
         }
-        if self.prepared {
-            let _ = self.release_session();
+        if self.prepared
+            && let Err(err) = self.release_session()
+        {
+            tracing::warn!(
+                target: "mindrove",
+                board_id = self.board_id.as_raw(),
+                error = %err,
+                "BoardShim drop release_session failed"
+            );
         }
     }
 }
@@ -403,6 +474,7 @@ fn clamp_data_count(requested_count: usize, available_count: usize) -> usize {
 }
 
 fn scalar_metadata(kind: u8, board_id: BoardId, preset: MindRovePreset) -> Result<i32> {
+    internal::ensure_logging_bridge();
     read_scalar(|| {
         let mut value = 0;
         (
@@ -417,6 +489,7 @@ fn scalar_index_metadata(kind: u8, board_id: BoardId, preset: MindRovePreset) ->
 }
 
 fn channel_metadata(kind: u8, board_id: BoardId, preset: MindRovePreset) -> Result<Vec<usize>> {
+    internal::ensure_logging_bridge();
     let values = internal::read_i32_vec(|values, len| {
         internal::board_channels(kind, board_id.as_raw(), preset as i32, values, len)
     })?;
@@ -436,6 +509,7 @@ fn read_string_metadata<F>(call: F) -> Result<String>
 where
     F: Fn(*mut c_char, *mut i32) -> i32,
 {
+    internal::ensure_logging_bridge();
     internal::read_string(call)
 }
 
@@ -467,7 +541,7 @@ mod tests {
     #[test]
     fn scalar_metadata_requires_success_status() {
         assert_eq!(read_scalar(|| (0, 128)).unwrap(), 128);
-        assert!(matches!(read_scalar(|| (17, 128)), Err(Error::Native(_))));
+        assert!(matches!(read_scalar(|| (17, 128)), Err(Error::General)));
     }
 
     #[test]

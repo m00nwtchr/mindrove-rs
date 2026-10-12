@@ -16,6 +16,19 @@ LD_LIBRARY_PATH="$PWD/mindrove-sys/sdk/lib" cargo run --example synthetic_acquis
 The board data returned by `get_current_board_data` is an `Array2<f64>` whose
 shape is **channels x samples**. The example prints both dimensions.
 
+## Logging
+
+Applications configure `tracing` and install the subscriber that should receive
+their logs. The library does not install a subscriber. On Linux, MindRove
+forwards vendor SDK logs automatically through that application-configured
+tracing pipeline.
+
+If the Linux logging bridge cannot be constructed, the library continues
+without vendor-log forwarding and emits one warning with `target: "mindrove"`.
+Native SDK internal logs are capturable only when the SDK honors the configured
+`/proc/self/fd/<write-fd>` sink. The bridge does not redirect or otherwise
+modify stdout or stderr.
+
 Pure unit tests exercise Rust-side behavior and require no hardware, but the
 test binary still loads the vendored FFI libraries at startup. Synthetic board
 and other native tests additionally require the vendored Linux runtime. Run the

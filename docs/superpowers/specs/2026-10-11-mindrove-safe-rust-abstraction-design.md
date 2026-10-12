@@ -53,7 +53,7 @@ The public module organization will retain the C++ class concepts. `BoardShim` a
 
 SDK integer enums will be represented with exact discriminants for board IDs, presets, IP protocols, filters, aggregation, windows, detrending, metrics, classifiers, log levels, noise, wavelet, threshold, extension, and noise-estimation choices. Board IDs will expose the named SDK constants and a raw-ID constructor so playback, streaming, custom, or future IDs can still be passed through.
 
-Native exit codes will be represented by a typed error-code value. Known codes have named variants; unknown integer values are retained as an `Unknown(i32)` value rather than discarded.
+Native exit codes will be converted immediately into named `thiserror` variants. Unknown integer values become `Error::UnknownNativeStatus(raw)`, preserving the original status code for diagnostics.
 
 ### Parameters
 
@@ -106,8 +106,8 @@ For C ABI operations whose output size is represented by an out-parameter, the r
 
 The public `Error` type will distinguish:
 
-- known MindRove exit codes;
-- unknown native exit codes;
+- named `thiserror` variants for known MindRove failures;
+- an unknown native-status error that preserves its original status code for diagnostics;
 - invalid Rust arguments and integer/shape overflow;
 - interior NULs and invalid UTF-8;
 - JSON serialization/deserialization failures;

@@ -5,7 +5,7 @@ use mindrove::{
 };
 
 fn main() -> Result<()> {
-    BoardShim::enable_dev_board_logger()?;
+    support::init_tracing();
     println!("BoardShim Version: {}", BoardShim::get_version()?);
     println!("DataFilter Version: {}", DataFilter::get_version()?);
     println!("MLModel Version: {}", MLModel::get_version()?);

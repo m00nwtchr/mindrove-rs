@@ -3,7 +3,7 @@ mod support;
 use mindrove::{BoardId, BoardShim, Result};
 
 fn main() -> Result<()> {
-    BoardShim::enable_dev_board_logger()?;
+    support::init_tracing();
 
     BoardShim::get_board_presets(BoardId::from_raw(-1))?;
 

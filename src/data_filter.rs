@@ -98,6 +98,7 @@ pub struct DataFilter;
 
 impl DataFilter {
     pub fn set_log_level(level: LogLevel) -> Result<()> {
+        internal::ensure_logging_bridge();
         internal::check_status(internal::data_filter_log_level(level as i32))
     }
 
@@ -114,11 +115,17 @@ impl DataFilter {
     }
 
     pub fn set_log_file(path: &str) -> Result<()> {
+        // See `BoardShim::set_log_file` for the rationale: ensure the
+        // bridge is initialised before the explicit log file override
+        // so the caller's configuration wins.
+        internal::ensure_logging_bridge();
         let path = internal::to_cstring(path)?;
         internal::check_status(internal::data_filter_log_file(path.as_ptr()))
     }
 
     pub fn log_message(level: LogLevel, message: &str) -> Result<()> {
+        // See `BoardShim::set_log_file` for the rationale.
+        internal::ensure_logging_bridge();
         let mut message = internal::to_cstring(message)?.into_bytes_with_nul();
         internal::check_status(internal::data_filter_log_message(
             level as i32,
@@ -127,6 +134,7 @@ impl DataFilter {
     }
 
     pub fn get_version() -> Result<String> {
+        internal::ensure_logging_bridge();
         const VERSION_BUFFER_LEN: i32 = 64;
         let mut buffer = vec![0_u8; VERSION_BUFFER_LEN as usize];
         let mut len = VERSION_BUFFER_LEN;

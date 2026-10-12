@@ -3,7 +3,7 @@ mod support;
 use mindrove::{BoardId, BoardShim, MindRoveInputParams, MindRovePreset, Result};
 
 fn main() -> Result<()> {
-    BoardShim::enable_dev_board_logger()?;
+    support::init_tracing();
 
     let mut board = BoardShim::new(BoardId::SYNTHETIC_BOARD, MindRoveInputParams::default())?;
     board.prepare_session()?;

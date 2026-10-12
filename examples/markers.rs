@@ -3,7 +3,7 @@ mod support;
 use mindrove::{BoardShim, Result};
 
 fn main() -> Result<()> {
-    BoardShim::enable_dev_board_logger()?;
+    support::init_tracing();
 
     let (board_id, params) = support::parse_board_args(std::env::args())?;
 

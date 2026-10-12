@@ -5,6 +5,7 @@ mod metadata;
 mod ml_model;
 mod status;
 
+pub(crate) use crate::logging_bridge::ensure_logging_bridge;
 pub(crate) use buffers::{
     MAX_NATIVE_FILE_ELEMENTS, array2_from_native, checked_element_count, checked_native_capacity,
     read_i32_vec, read_string, sum_decomposition_lengths, wavelet_coefficient_capacity,
@@ -27,7 +28,7 @@ pub(crate) use metadata::{
     add_streamer, board_channels, board_metadata, board_presets, board_scalar, board_version,
     config_board, delete_streamer, get_board_data, get_board_data_count, get_current_board_data,
     insert_marker, is_prepared, logger_call, prepare_session, release_all_sessions,
-    release_session, set_log_file, start_stream, stop_stream,
+    release_session, set_log_file, set_log_file_raw, set_log_level_raw, start_stream, stop_stream,
 };
 pub(crate) use ml_model::{
     log_file as ml_log_file, log_level as ml_log_level, log_message as ml_log_message,

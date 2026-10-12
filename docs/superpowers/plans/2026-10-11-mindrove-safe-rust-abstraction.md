@@ -122,7 +122,7 @@ Expected: bindgen completes and the generated file contains the four C-ABI famil
 
 **Interfaces:**
 - Produces `pub enum Error` and `pub type Result<T> = std::result::Result<T, Error>`.
-- Produces `MindRoveExitCode`, `BoardId`, `MindRovePreset`, all SDK option enums, `MindRoveInputParams`, and `MindRoveModelParams`.
+- Produces named `thiserror` variants for native SDK failures, `BoardId`, `MindRovePreset`, all SDK option enums, `MindRoveInputParams`, and `MindRoveModelParams`.
 - Produces serde JSON strings whose keys exactly match the sixteen input/model parameter field names in the SDK headers.
 
 - [ ] **Step 1: Declare the exact safe-wrapper dependencies and feature.**
@@ -175,10 +175,10 @@ Also add an error test:
 
 ```rust
 #[test]
-fn unknown_status_is_preserved() {
+fn unknown_status_becomes_typed_error() {
     assert!(matches!(
         Error::from_status(9999),
-        Error::Native(code) if code.as_raw() == 9999
+        Err(Error::UnknownNativeStatus(9999))
     ));
 }
 ```
@@ -193,45 +193,14 @@ Expected: the new tests fail because the public types do not exist yet.
 
 - [ ] **Step 3: Implement `src/error.rs`.**
 
-Use `thiserror` and keep the native code typed:
+Use `thiserror` and convert native statuses immediately into named errors:
 
 ```rust
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct MindRoveExitCode(i32);
-
-impl MindRoveExitCode {
-    pub const STATUS_OK: Self = Self(0);
-    pub const PORT_ALREADY_OPEN_ERROR: Self = Self(1);
-    pub const UNABLE_TO_OPEN_PORT_ERROR: Self = Self(2);
-    pub const SET_PORT_ERROR: Self = Self(3);
-    pub const BOARD_WRITE_ERROR: Self = Self(4);
-    pub const INCOMMING_MSG_ERROR: Self = Self(5);
-    pub const INITIAL_MSG_ERROR: Self = Self(6);
-    pub const BOARD_NOT_READY_ERROR: Self = Self(7);
-    pub const STREAM_ALREADY_RUN_ERROR: Self = Self(8);
-    pub const INVALID_BUFFER_SIZE_ERROR: Self = Self(9);
-    pub const STREAM_THREAD_ERROR: Self = Self(10);
-    pub const STREAM_THREAD_IS_NOT_RUNNING: Self = Self(11);
-    pub const EMPTY_BUFFER_ERROR: Self = Self(12);
-    pub const INVALID_ARGUMENTS_ERROR: Self = Self(13);
-    pub const UNSUPPORTED_BOARD_ERROR: Self = Self(14);
-    pub const BOARD_NOT_CREATED_ERROR: Self = Self(15);
-    pub const ANOTHER_BOARD_IS_CREATED_ERROR: Self = Self(16);
-    pub const GENERAL_ERROR: Self = Self(17);
-    pub const SYNC_TIMEOUT_ERROR: Self = Self(18);
-    pub const JSON_NOT_FOUND_ERROR: Self = Self(19);
-    pub const NO_SUCH_DATA_IN_JSON_ERROR: Self = Self(20);
-    pub const CLASSIFIER_IS_NOT_PREPARED_ERROR: Self = Self(21);
-    pub const ANOTHER_CLASSIFIER_IS_PREPARED_ERROR: Self = Self(22);
-    pub const UNSUPPORTED_CLASSIFIER_AND_METRIC_COMBINATION_ERROR: Self = Self(23);
-
-    pub const fn as_raw(self) -> i32 { self.0 }
-}
-
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("MindRove native error: {0:?}")]
-    Native(MindRoveExitCode),
+    // One named variant per SDK status code, plus UnknownNativeStatus.
+    #[error("unknown MindRove native status: {0}")]
+    UnknownNativeStatus(i32),
     #[error("invalid argument: {0}")]
     InvalidArgument(String),
     #[error("integer or allocation size overflow")]
@@ -251,7 +220,7 @@ pub enum Error {
 pub type Result<T> = std::result::Result<T, Error>;
 ```
 
-Implement `MindRoveExitCode::from_raw(i32)` as a lossless integer wrapper and `Error::from_status(i32)`, where `0` is success and every other value becomes `Error::Native(MindRoveExitCode::from_raw(raw))`. The named constants above provide the SDK-known values while unknown integers remain available through `as_raw()`.
+Implement `Error::from_status(i32)` as a complete match: `0` is success, statuses `1..=23` map to their named variants, and unknown integers map to `Error::UnknownNativeStatus(raw)`, preserving the original status code for diagnostics.
 
 - [ ] **Step 4: Implement `src/types.rs` and `src/lib.rs` exports.**
 

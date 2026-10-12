@@ -5,8 +5,7 @@ use std::time::Duration;
 use mindrove::{BoardShim, DataFilter, MLModel};
 
 fn main() -> mindrove::Result<()> {
-    BoardShim::enable_dev_board_logger()?;
-    MLModel::enable_dev_ml_logger()?;
+    support::init_tracing();
 
     let (board_id, input_params, model_params) = support::parse_model_args(std::env::args())?;
     let mut board = BoardShim::new(board_id, input_params)?;

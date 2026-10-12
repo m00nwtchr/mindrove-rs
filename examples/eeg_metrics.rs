@@ -8,7 +8,7 @@ use mindrove::{
 };
 
 fn main() -> mindrove::Result<()> {
-    BoardShim::enable_dev_board_logger()?;
+    support::init_tracing();
 
     let (board_id, input_params) = support::parse_board_args(std::env::args())?;
     let mut board = BoardShim::new(board_id, input_params)?;

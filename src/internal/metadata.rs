@@ -83,6 +83,24 @@ pub(crate) fn set_log_file(path: *const c_char) -> i32 {
     unsafe { mindrove_sys::set_log_file_board_controller(path) }
 }
 
+/// Raw status-returning wrapper around `set_log_file_board_controller`.
+///
+/// Used exclusively by the internal vendor logging bridge during one-time
+/// initialization. It intentionally bypasses `check_status` and must not
+/// recurse into `ensure_logging_bridge`.
+pub(crate) fn set_log_file_raw(path: *const c_char) -> i32 {
+    unsafe { mindrove_sys::set_log_file_board_controller(path) }
+}
+
+/// Raw status-returning wrapper around `set_log_level_board_controller`.
+///
+/// Used exclusively by the internal vendor logging bridge during one-time
+/// initialization. It intentionally bypasses `check_status` and must not
+/// recurse into `ensure_logging_bridge`.
+pub(crate) fn set_log_level_raw(level: i32) -> i32 {
+    unsafe { mindrove_sys::set_log_level_board_controller(level) }
+}
+
 pub(crate) fn release_all_sessions() -> i32 {
     unsafe { mindrove_sys::release_all_sessions() }
 }

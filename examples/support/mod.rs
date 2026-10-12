@@ -5,6 +5,10 @@ use mindrove::{
     MindRoveModelParams, Result,
 };
 
+pub(crate) fn init_tracing() {
+    tracing_subscriber::fmt::init();
+}
+
 pub fn parse_board_args<I, S>(args: I) -> Result<(BoardId, MindRoveInputParams)>
 where
     I: IntoIterator<Item = S>,

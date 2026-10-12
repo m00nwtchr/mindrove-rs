@@ -11,6 +11,7 @@ pub struct MLModel {
 
 impl MLModel {
     pub fn new(params: MindRoveModelParams) -> Result<Self> {
+        internal::ensure_logging_bridge();
         if params.max_array_size <= 0 {
             return Err(Error::InvalidArgument(
                 "max_array_size must be greater than zero".into(),
@@ -81,15 +82,23 @@ impl MLModel {
     }
 
     pub fn set_log_level(level: LogLevel) -> Result<()> {
+        // See `BoardShim::set_log_file` for the rationale.
+        internal::ensure_logging_bridge();
         internal::check_status(internal::ml_log_level(level as i32))
     }
 
     pub fn set_log_file(path: &str) -> Result<()> {
+        // See `BoardShim::set_log_file` for the rationale: ensure the
+        // bridge is initialised before the explicit log file override
+        // so the caller's configuration wins.
+        internal::ensure_logging_bridge();
         let path = internal::to_cstring(path)?;
         internal::check_status(internal::ml_log_file(path.as_ptr()))
     }
 
     pub fn log_message(level: LogLevel, message: &str) -> Result<()> {
+        // See `BoardShim::set_log_file` for the rationale.
+        internal::ensure_logging_bridge();
         let mut message = internal::to_cstring(message)?.into_bytes_with_nul();
         internal::check_status(internal::ml_log_message(
             level as i32,
@@ -98,6 +107,11 @@ impl MLModel {
     }
 
     pub fn get_version() -> Result<String> {
+        // Explicit bridge call in addition to the one performed by
+        // `read_string`; either path alone would suffice, both together
+        // make the dependency on the bridge clear at this standalone
+        // entrypoint.
+        internal::ensure_logging_bridge();
         internal::read_string(|buffer, len| internal::ml_version(buffer, len, 1 << 20))
     }
 }
@@ -105,7 +119,15 @@ impl MLModel {
 impl Drop for MLModel {
     fn drop(&mut self) {
         if self.prepared {
-            let _ = internal::ml_release(self.params_json.as_ptr());
+            let status = internal::ml_release(self.params_json.as_ptr());
+            self.prepared = false;
+            if let Err(err) = internal::check_status(status) {
+                tracing::warn!(
+                    target: "mindrove",
+                    error = %err,
+                    "MLModel drop release failed"
+                );
+            }
         }
     }
 }

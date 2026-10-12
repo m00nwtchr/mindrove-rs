@@ -55,6 +55,7 @@ pub(crate) fn read_string<F>(call: F) -> Result<String>
 where
     F: Fn(*mut c_char, *mut c_int) -> c_int,
 {
+    super::ensure_logging_bridge();
     let capacity = MAX_NATIVE_BYTES;
     let mut buffer = vec![0_u8; capacity];
     let mut filled_len = checked_native_capacity(capacity)?;
@@ -78,6 +79,7 @@ pub(crate) fn read_i32_vec<F>(call: F) -> Result<Vec<i32>>
 where
     F: Fn(*mut i32, *mut c_int) -> c_int,
 {
+    super::ensure_logging_bridge();
     let capacity = MAX_NATIVE_BYTES / std::mem::size_of::<i32>();
     let native_capacity = checked_native_capacity(capacity)?;
     let mut buffer = vec![0_i32; capacity];

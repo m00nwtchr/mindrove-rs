@@ -7,6 +7,16 @@ use std::ffi::CString;
 
 pub use mindrove::{Error, Result};
 
+// `internal/mod.rs` re-exports `crate::logging_bridge::ensure_logging_bridge`,
+// so the integration test must provide a `logging_bridge` module to satisfy
+// the `crate::` path resolution when it re-includes `internal/mod.rs`. The
+// bridge is private and unused here; this stub exists purely to satisfy the
+// path lookup and intentionally re-exports the symbol under the same name.
+#[allow(dead_code)]
+mod logging_bridge {
+    pub(crate) fn ensure_logging_bridge() {}
+}
+
 #[path = "../src/internal/mod.rs"]
 mod internal;
 
@@ -19,7 +29,7 @@ use internal::{
 #[test]
 fn status_helper_accepts_only_success() {
     assert!(check_status(0).is_ok());
-    assert!(matches!(check_status(7), Err(Error::Native(_))));
+    assert!(matches!(check_status(7), Err(Error::BoardNotReady)));
 }
 
 #[test]

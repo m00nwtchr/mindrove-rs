@@ -2,12 +2,10 @@ mod support;
 
 use std::time::Duration;
 
-use mindrove::{BoardId, BoardShim, LogLevel, MindRoveInputParams, Result};
+use mindrove::{BoardId, BoardShim, MindRoveInputParams, Result};
 use ndarray::Array2;
 
 fn run() -> Result<()> {
-    BoardShim::enable_dev_board_logger()?;
-
     let params = support::parse_syncbox_args(std::env::args())?;
     let board_id = BoardId::MINDROVE_SYNCBOX_BOARD;
 
@@ -15,7 +13,7 @@ fn run() -> Result<()> {
     for entry in params {
         let mut board = BoardShim::new(board_id, entry.clone())?;
         if let Err(err) = prepare_and_start(&mut board) {
-            BoardShim::log_message(LogLevel::LEVEL_ERROR, &format!("{err}"))?;
+            tracing::error!(target: "mindrove", error = %err, "failed to prepare and start board");
         }
         boards.push((entry, board));
     }
@@ -32,7 +30,7 @@ fn run() -> Result<()> {
                 println!("{data}");
             }
             Err(err) => {
-                BoardShim::log_message(LogLevel::LEVEL_ERROR, &format!("{err}"))?;
+                tracing::error!(target: "mindrove", error = %err, "failed to stop, get data, and release board");
             }
         }
     }
@@ -54,10 +52,11 @@ fn stop_get_release(board: &mut BoardShim) -> Result<Array2<f64>> {
 }
 
 fn main() -> Result<()> {
+    support::init_tracing();
     match run() {
         Ok(()) => Ok(()),
         Err(err) => {
-            BoardShim::log_message(LogLevel::LEVEL_ERROR, &format!("{err}"))?;
+            tracing::error!(target: "mindrove", error = %err, "syncbox example failed");
             Err(err)
         }
     }

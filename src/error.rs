@@ -1,45 +1,53 @@
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct MindRoveExitCode(i32);
-
-impl MindRoveExitCode {
-    pub const STATUS_OK: Self = Self(0);
-    pub const PORT_ALREADY_OPEN_ERROR: Self = Self(1);
-    pub const UNABLE_TO_OPEN_PORT_ERROR: Self = Self(2);
-    pub const SET_PORT_ERROR: Self = Self(3);
-    pub const BOARD_WRITE_ERROR: Self = Self(4);
-    pub const INCOMMING_MSG_ERROR: Self = Self(5);
-    pub const INITIAL_MSG_ERROR: Self = Self(6);
-    pub const BOARD_NOT_READY_ERROR: Self = Self(7);
-    pub const STREAM_ALREADY_RUN_ERROR: Self = Self(8);
-    pub const INVALID_BUFFER_SIZE_ERROR: Self = Self(9);
-    pub const STREAM_THREAD_ERROR: Self = Self(10);
-    pub const STREAM_THREAD_IS_NOT_RUNNING: Self = Self(11);
-    pub const EMPTY_BUFFER_ERROR: Self = Self(12);
-    pub const INVALID_ARGUMENTS_ERROR: Self = Self(13);
-    pub const UNSUPPORTED_BOARD_ERROR: Self = Self(14);
-    pub const BOARD_NOT_CREATED_ERROR: Self = Self(15);
-    pub const ANOTHER_BOARD_IS_CREATED_ERROR: Self = Self(16);
-    pub const GENERAL_ERROR: Self = Self(17);
-    pub const SYNC_TIMEOUT_ERROR: Self = Self(18);
-    pub const JSON_NOT_FOUND_ERROR: Self = Self(19);
-    pub const NO_SUCH_DATA_IN_JSON_ERROR: Self = Self(20);
-    pub const CLASSIFIER_IS_NOT_PREPARED_ERROR: Self = Self(21);
-    pub const ANOTHER_CLASSIFIER_IS_PREPARED_ERROR: Self = Self(22);
-    pub const UNSUPPORTED_CLASSIFIER_AND_METRIC_COMBINATION_ERROR: Self = Self(23);
-
-    pub const fn from_raw(raw: i32) -> Self {
-        Self(raw)
-    }
-
-    pub const fn as_raw(self) -> i32 {
-        self.0
-    }
-}
-
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("MindRove native error: {0:?}")]
-    Native(MindRoveExitCode),
+    #[error("MindRove port is already open")]
+    PortAlreadyOpen,
+    #[error("MindRove was unable to open the port")]
+    UnableToOpenPort,
+    #[error("MindRove failed to set the port")]
+    SetPort,
+    #[error("MindRove failed to write to the board")]
+    BoardWrite,
+    #[error("MindRove received an incoming message error")]
+    IncomingMessage,
+    #[error("MindRove failed to receive the initial message")]
+    InitialMessage,
+    #[error("MindRove board is not ready")]
+    BoardNotReady,
+    #[error("MindRove stream is already running")]
+    StreamAlreadyRunning,
+    #[error("MindRove buffer size is invalid")]
+    InvalidBufferSize,
+    #[error("MindRove stream thread failed")]
+    StreamThread,
+    #[error("MindRove stream thread is not running")]
+    StreamThreadNotRunning,
+    #[error("MindRove buffer is empty")]
+    EmptyBuffer,
+    #[error("MindRove arguments are invalid")]
+    InvalidArguments,
+    #[error("MindRove board is unsupported")]
+    UnsupportedBoard,
+    #[error("MindRove board was not created")]
+    BoardNotCreated,
+    #[error("another MindRove board has been created")]
+    AnotherBoardCreated,
+    #[error("MindRove general error")]
+    General,
+    #[error("MindRove synchronization timed out")]
+    SyncTimeout,
+    #[error("MindRove JSON was not found")]
+    JsonNotFound,
+    #[error("MindRove data was not found in JSON")]
+    NoSuchDataInJson,
+    #[error("MindRove classifier is not prepared")]
+    ClassifierNotPrepared,
+    #[error("another MindRove classifier has been prepared")]
+    AnotherClassifierPrepared,
+    #[error("MindRove classifier and metric combination is unsupported")]
+    UnsupportedClassifierMetricCombination,
+    #[error("unknown MindRove native status: {0}")]
+    UnknownNativeStatus(i32),
     #[error("invalid argument: {0}")]
     InvalidArgument(String),
     #[error("integer or allocation size overflow")]
@@ -58,10 +66,32 @@ pub enum Error {
 
 impl Error {
     pub fn from_status(raw: i32) -> Result<()> {
-        if raw == MindRoveExitCode::STATUS_OK.as_raw() {
-            Ok(())
-        } else {
-            Err(Self::Native(MindRoveExitCode::from_raw(raw)))
+        match raw {
+            0 => Ok(()),
+            1 => Err(Self::PortAlreadyOpen),
+            2 => Err(Self::UnableToOpenPort),
+            3 => Err(Self::SetPort),
+            4 => Err(Self::BoardWrite),
+            5 => Err(Self::IncomingMessage),
+            6 => Err(Self::InitialMessage),
+            7 => Err(Self::BoardNotReady),
+            8 => Err(Self::StreamAlreadyRunning),
+            9 => Err(Self::InvalidBufferSize),
+            10 => Err(Self::StreamThread),
+            11 => Err(Self::StreamThreadNotRunning),
+            12 => Err(Self::EmptyBuffer),
+            13 => Err(Self::InvalidArguments),
+            14 => Err(Self::UnsupportedBoard),
+            15 => Err(Self::BoardNotCreated),
+            16 => Err(Self::AnotherBoardCreated),
+            17 => Err(Self::General),
+            18 => Err(Self::SyncTimeout),
+            19 => Err(Self::JsonNotFound),
+            20 => Err(Self::NoSuchDataInJson),
+            21 => Err(Self::ClassifierNotPrepared),
+            22 => Err(Self::AnotherClassifierPrepared),
+            23 => Err(Self::UnsupportedClassifierMetricCombination),
+            _ => Err(Self::UnknownNativeStatus(raw)),
         }
     }
 }
