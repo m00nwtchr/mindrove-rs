@@ -10,15 +10,14 @@ use mindrove::{
 fn main() -> mindrove::Result<()> {
     support::init_tracing();
 
-    let (board_id, input_params) = support::parse_board_args(std::env::args())?;
+    let (board_id, input_params) =
+        support::BoardArgs::try_from(std::env::args().collect::<Vec<_>>())?.into_parts()?;
     let mut board = BoardShim::new(board_id, input_params)?;
-    board.prepare_session()?;
     board.start_stream()?;
     std::thread::sleep(Duration::from_secs(5));
     board.stop_stream()?;
 
     let data = board.get_board_data()?;
-    board.release_session()?;
     println!("{data}");
 
     let sampling_rate = BoardShim::get_sampling_rate(BoardId::SYNTHETIC_BOARD)?;

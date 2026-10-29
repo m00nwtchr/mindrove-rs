@@ -4,18 +4,6 @@
 
 use std::os::raw::{c_char, c_int};
 
-pub(crate) fn data_filter_log_level(level: c_int) -> c_int {
-    unsafe { mindrove_sys::set_log_level_data_handler(level) }
-}
-
-pub(crate) fn data_filter_log_file(path: *const c_char) -> c_int {
-    unsafe { mindrove_sys::set_log_file_data_handler(path) }
-}
-
-pub(crate) fn data_filter_log_message(level: c_int, message: *mut c_char) -> c_int {
-    unsafe { mindrove_sys::log_message_data_handler(level, message) }
-}
-
 pub(crate) fn data_filter_version(buffer: *mut c_char, len: *mut c_int, max_len: c_int) -> c_int {
     unsafe { mindrove_sys::get_version_data_handler(buffer, len, max_len) }
 }

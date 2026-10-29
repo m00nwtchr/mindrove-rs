@@ -14,6 +14,8 @@
     git
     clang
 
+    pkg-config
+    systemd.dev
     llvmPackages.libclang
   ];
 

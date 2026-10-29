@@ -3,9 +3,8 @@ name = "mindrove-sys"
 version = "0.1.0"
 edition = "2024"
 
-[dependencies]
-
 [build-dependencies]
+cc = "1.10"
 bindgen = "0.71"
 fs2 = "0.4"
 sha2 = "0.10"

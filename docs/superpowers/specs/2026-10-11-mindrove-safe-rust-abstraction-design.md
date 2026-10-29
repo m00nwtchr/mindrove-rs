@@ -38,7 +38,7 @@ The build script will link the native `BoardController`, `DataHandler`, and `MLM
 
 The root crate will expose focused modules:
 
-- `board_shim`: board metadata, logger controls, session lifecycle, streamers, markers, board configuration, and data retrieval;
+- `board_shim`: board metadata, session lifecycle, streamers, markers, board configuration, and data retrieval;
 - `data_filter`: static signal-processing, spectral, PPG, file, CSP, and ICA operations;
 - `ml_model`: owned model parameters and prepare/predict/release lifecycle;
 - `types`: Rust representations of SDK enums and JSON parameter structs;
@@ -51,7 +51,7 @@ The public module organization will retain the C++ class concepts. `BoardShim` a
 
 ### Enums and constants
 
-SDK integer enums will be represented with exact discriminants for board IDs, presets, IP protocols, filters, aggregation, windows, detrending, metrics, classifiers, log levels, noise, wavelet, threshold, extension, and noise-estimation choices. Board IDs will expose the named SDK constants and a raw-ID constructor so playback, streaming, custom, or future IDs can still be passed through.
+SDK integer enums will be represented with exact discriminants for board IDs, presets, IP protocols, filters, aggregation, windows, detrending, metrics, classifiers, noise, wavelet, threshold, extension, and noise-estimation choices. Board IDs will expose the named SDK constants and a raw-ID constructor so playback, streaming, custom, or future IDs can still be passed through.
 
 Native exit codes will be converted immediately into named `thiserror` variants. Unknown integer values become `Error::UnknownNativeStatus(raw)`, preserving the original status code for diagnostics.
 
@@ -77,16 +77,13 @@ Every native invocation is made through a private helper which validates argumen
 
 ### Board sessions
 
-`BoardShim::new` stores the board ID and serialized input parameters but does not prepare or start a native session. Lifecycle methods correspond to the C++ API:
+`BoardShim::new` serializes input parameters, calls the native `prepare_session`, and only returns a `BoardShim` with `prepared = true` after successful preparation. The Rust type therefore owns its native session for the rest of its lifetime. The remaining lifecycle methods correspond to the C++ API:
 
-- `prepare_session`;
 - `start_stream`;
 - `stop_stream`;
-- `is_prepared`;
-- `release_session`;
-- `release_all_sessions`.
+- `is_prepared`.
 
-The Rust object tracks whether preparation/streaming succeeded. `Drop` performs best-effort cleanup without panicking; explicit `release_session` remains the deterministic path. Cleanup failures are not surfaced from `Drop`.
+`Drop` is the only release path. It stops an active stream, then calls the native release through a private/internal helper that does not recreate the removed public API. Failure during `Drop` is logged as a `target: "mindrove"` warning and never panics; cleanup is best-effort.
 
 Board data allocation uses checked `rows × requested_samples` arithmetic. `get_current_board_data` uses the native returned-sample count to construct the final `Array2` shape. Draining methods determine the requested count according to the C++ overload semantics and preserve the channels × samples layout.
 

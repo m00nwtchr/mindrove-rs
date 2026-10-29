@@ -10,9 +10,7 @@ fn main() -> Result<()> {
     println!("DataFilter Version: {}", DataFilter::get_version()?);
     println!("MLModel Version: {}", MLModel::get_version()?);
 
-    let params = MindRoveInputParams::default();
-    let mut board = BoardShim::new(BoardId::SYNTHETIC_BOARD, params)?;
-    board.prepare_session()?;
+    let mut board = BoardShim::new(BoardId::SYNTHETIC_BOARD, MindRoveInputParams::default())?;
 
     board.add_streamer("file://streamer_default.csv:w")?;
     board.start_stream()?;
@@ -30,6 +28,5 @@ fn main() -> Result<()> {
     let data = board.get_current_board_data(10)?;
     println!("{data}");
 
-    board.release_session()?;
     Ok(())
 }

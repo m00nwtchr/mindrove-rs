@@ -224,7 +224,7 @@ Implement `Error::from_status(i32)` as a complete match: `0` is success, statuse
 
 - [ ] **Step 4: Implement `src/types.rs` and `src/lib.rs` exports.**
 
-Use exact SDK values for `BoardId`, `MindRovePreset`, `IpProtocolType`, `FilterType`, `AggOperation`, `WindowOperation`, `DetrendOperation`, `MindRoveMetric`, `MindRoveClassifier`, `LogLevel`, `NoiseType`, `WaveletDenoisingType`, `ThresholdType`, `WaveletExtensionType`, `NoiseEstimationLevelType`, and `WaveletType`. Use a board-ID newtype with these associated constants:
+Use exact SDK values for `BoardId`, `MindRovePreset`, `IpProtocolType`, `FilterType`, `AggOperation`, `WindowOperation`, `DetrendOperation`, `MindRoveMetric`, `MindRoveClassifier`, `NoiseType`, `WaveletDenoisingType`, `ThresholdType`, `WaveletExtensionType`, `NoiseEstimationLevelType`, and `WaveletType`. Use a board-ID newtype with these associated constants:
 
 ```rust
 pub const NO_BOARD: BoardId = BoardId(-100);
@@ -336,7 +336,7 @@ cargo test --test internal
 
 Expected: PASS without requiring hardware. Add a feature-gated `get_version_*` smoke test only after the native board task enables the runtime link path.
 
-## Task 4: Implement `BoardShim` metadata and logging
+## Task 4: Implement `BoardShim` metadata
 
 **Files:**
 - Create/modify: `src/board_shim.rs`
@@ -344,7 +344,7 @@ Expected: PASS without requiring hardware. Add a feature-gated `get_version_*` s
 
 **Interfaces:**
 - Consumes: `mindrove_sys` metadata/logging functions and internal probe/status helpers.
-- Produces associated functions named after the C++ API: `get_board_descr`, `get_sampling_rate`, `get_package_num_channel`, `get_timestamp_channel`, `get_marker_channel`, `get_battery_channel`, `get_num_rows`, `get_device_name`, `get_eeg_names`, every channel getter, `get_board_presets`, `release_all_sessions`, `get_version`, and logger methods.
+- Produces associated functions named after the C++ API: `get_board_descr`, `get_sampling_rate`, `get_package_num_channel`, `get_timestamp_channel`, `get_marker_channel`, `get_battery_channel`, `get_num_rows`, `get_device_name`, `get_eeg_names`, every channel getter, `get_board_presets`, and `get_version`.
 
 - [ ] **Step 1: Define the `BoardShim` state and metadata call pattern.**
 
@@ -369,9 +369,9 @@ Test that a scalar native result is returned only for status zero, a string uses
 
 Use the exact raw functions from `board_info_getter.h`. Convert nonnegative channel/preset indices to `usize` or `MindRovePreset` only after validation. Return `serde_json::Value` from `get_board_descr` after UTF-8 and JSON parsing. Preserve the C++ names and default-preset behavior.
 
-- [ ] **Step 4: Implement logger controls.**
+- [x] **Step 4: Keep logger controls internal.**
 
-Map `enable_board_logger`, `disable_board_logger`, `enable_dev_board_logger`, `set_log_file`, and `set_log_level` to the board-controller C functions. Implement `log_message(log_level, message: &str)` using the C ABI's message-string function, not C++ varargs.
+Logging configuration remains private to the tracing bridge; it is not part of the public safe API.
 
 - [ ] **Step 5: Run pure metadata tests and a raw-link smoke check.**
 
@@ -392,7 +392,7 @@ Expected: all pure tests pass and the public module compiles against generated b
 
 **Interfaces:**
 - Consumes: `BoardShim` metadata and internal JSON/buffer helpers.
-- Produces `prepare_session`, `start_stream`, `start_stream_with_options`, `stop_stream`, `is_prepared`, `release_session`, `add_streamer`, `delete_streamer`, `insert_marker`, `config_board`, `get_board_id`, `get_board_data_count`, `get_current_board_data`, `get_board_data`, and `get_board_data_n`.
+- Produces `start_stream`, `start_stream_with_options`, `stop_stream`, `is_prepared`, `add_streamer`, `delete_streamer`, `insert_marker`, `config_board`, `get_board_id`, `get_board_data_count`, `get_current_board_data`, `get_board_data`, and `get_board_data_n`. `BoardShim::new` is the sole preparation entry point and `Drop` is the sole release path.
 
 - [ ] **Step 1: Write feature-gated synthetic-board tests.**
 
@@ -404,22 +404,21 @@ Use the official lifecycle and assert the channel×sample shape:
 #[test]
 fn synthetic_board_returns_channel_sample_data() {
     let mut board = BoardShim::new(BoardId::SYNTHETIC_BOARD, MindRoveInputParams::default()).unwrap();
-    board.prepare_session().unwrap();
+    assert!(board.is_prepared().unwrap());
     board.start_stream().unwrap();
     std::thread::sleep(std::time::Duration::from_millis(100));
     let data = board.get_current_board_data(2).unwrap();
     assert_eq!(data.nrows(), BoardShim::get_num_rows(BoardId::SYNTHETIC_BOARD).unwrap());
     assert!(data.ncols() <= 2);
     board.stop_stream().unwrap();
-    board.release_session().unwrap();
 }
 ```
 
-Also test `get_board_data_count`, `get_board_data_n`, `get_board_id`, and cleanup after a failed operation.
+Also test `get_board_data_count`, `get_board_data_n`, `get_board_id`, the RAII invalid-board error from `BoardShim::new`, and Drop cleanup.
 
 - [ ] **Step 2: Implement lifecycle state transitions.**
 
-Call the raw functions with `board_id.as_raw()` and `params_json.as_ptr()`. Set `prepared` only after successful preparation and `streaming` only after successful start. `release_session` clears both flags after a successful call. `Drop` calls `stop_stream` if tracked as streaming, then `release_session` if tracked as prepared, ignoring errors and never panicking.
+`BoardShim::new` serializes params, calls the native `prepare_session`, and returns the typed error if preparation fails. Construction is the only path that prepares; `Drop` is the only path that releases. Set `prepared` only after successful preparation and `streaming` only after successful start. The private release helper used by `Drop` calls the native `release_session` and clears `prepared`/`streaming`; `Drop` warns on failure and never panics.
 
 - [ ] **Step 3: Implement board data allocation with the C ABI asymmetry.**
 
@@ -455,7 +454,7 @@ Expected: pure tests pass everywhere; the feature-gated synthetic test passes wh
 
 **Interfaces:**
 - Consumes: generated `data_handler` functions, `Error`, enum conversions, and checked slice helpers.
-- Produces `DataFilter` associated methods for logger controls, in-place filters, scalar metrics, PPG metrics, windows, and nearest-power calculations.
+- Produces `DataFilter` associated methods for in-place filters, scalar metrics, PPG metrics, windows, and nearest-power calculations.
 
 - [ ] **Step 1: Write pure input-validation tests.**
 
@@ -474,9 +473,9 @@ fn mismatched_ppg_inputs_are_rejected_before_ffi() {
 }
 ```
 
-- [ ] **Step 2: Implement `DataFilter` logger/version methods.**
+- [x] **Step 2: Implement `DataFilter` version methods.**
 
-Use `set_log_level_data_handler`, `set_log_file_data_handler`, `log_message_data_handler`, and `get_version_data_handler`. Keep logger messages as `&str` and convert them with the shared C-string helper.
+The public logger methods were removed in favor of the internal tracing bridge; retain only the version entrypoint and its checked string conversion.
 
 - [ ] **Step 3: Implement in-place filters.**
 
@@ -580,8 +579,8 @@ Expected: official-example inputs pass shape/length assertions; a malformed nati
 - Create/modify: `tests/native_ml.rs`
 
 **Interfaces:**
-- Consumes: `MindRoveModelParams`, JSON/C-string helpers, and `prepare`, `predict`, `release`, logging, version, and `release_all` raw symbols.
-- Produces `MLModel::new`, `prepare`, `predict`, `release`, `release_all`, logger methods, and `get_version`.
+- Consumes: `MindRoveModelParams`, JSON/C-string helpers, and `prepare`, `predict`, `release`, version, and `release_all` raw symbols.
+- Produces `MLModel::new`, `prepare`, `predict`, `release`, `release_all`, and `get_version`.
 
 - [ ] **Step 1: Write the feature-gated lifecycle test.**
 
@@ -605,9 +604,9 @@ pub struct MLModel {
 
 Allocate exactly `max_array_size` doubles, pass its checked `i32` length to `predict`, validate `0 <= output_len <= max_array_size`, truncate the owned vector, and return it. Reject empty input or a zero `max_array_size` before FFI.
 
-- [ ] **Step 4: Implement ML logging and version methods.**
+- [x] **Step 4: Implement ML version methods.**
 
-Map the ML module logger functions and `get_version_ml_module` through the same private string/status helpers. `log_message` accepts a Rust `&str`, never a varargs format string.
+The public ML logger methods were removed in favor of the internal tracing bridge; retain only `get_version_ml_module` through the checked string/status helpers.
 
 - [ ] **Step 5: Run ML tests and clippy.**
 
@@ -633,21 +632,18 @@ Expected: the test either exercises the model lifecycle with an available asset 
 
 - [ ] **Step 1: Write the example against the finished public API.**
 
-The example must follow this sequence:
+The example must follow this sequence and rely on RAII for both preparation and release:
 
 ```rust
-BoardShim::enable_dev_board_logger()?;
 let mut board = BoardShim::new(BoardId::SYNTHETIC_BOARD, MindRoveInputParams::default())?;
-board.prepare_session()?;
 board.start_stream()?;
 std::thread::sleep(std::time::Duration::from_secs(1));
 board.stop_stream()?;
 let data = board.get_current_board_data(10)?;
 println!("{} channels × {} samples", data.nrows(), data.ncols());
-board.release_session()?;
 ```
 
-Adapt logger methods if they are intentionally infallible, but preserve the same lifecycle and explicit release.
+Use the tracing bridge for native diagnostics; `Drop` performs best-effort cleanup automatically.
 
 - [ ] **Step 2: Document native runtime setup.**
 

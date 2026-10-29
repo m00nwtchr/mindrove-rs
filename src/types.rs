@@ -73,10 +73,6 @@ sdk_enum! { MindRoveClassifier {
 sdk_enum! { MindRovePreset {
     DEFAULT_PRESET = 0, AUXILIARY_PRESET = 1, ANCILLARY_PRESET = 2
 } }
-sdk_enum! { LogLevel {
-    LEVEL_TRACE = 0, LEVEL_DEBUG = 1, LEVEL_INFO = 2, LEVEL_WARN = 3,
-    LEVEL_ERROR = 4, LEVEL_CRITICAL = 5, LEVEL_OFF = 6
-} }
 sdk_enum! { NoiseType { FIFTY = 0, SIXTY = 1, FIFTY_AND_SIXTY = 2 } }
 sdk_enum! { WaveletDenoisingType { VISUSHRINK = 0, SURESHRINK = 1 } }
 sdk_enum! { ThresholdType { SOFT = 0, HARD = 1 } }

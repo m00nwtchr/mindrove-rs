@@ -7,7 +7,7 @@ modules, with the main types also re-exported at the crate root.
 ## Synthetic acquisition
 
 The official-style synthetic board example uses the safe lifecycle API and
-explicitly releases its session:
+relies on the `BoardShim`'s RAII `Drop` for release:
 
 ```sh
 LD_LIBRARY_PATH="$PWD/mindrove-sys/sdk/lib" cargo run --example synthetic_acquisition --features native-tests

@@ -6,14 +6,15 @@ use mindrove::{BoardId, BoardShim, MindRoveInputParams, Result};
 use ndarray::Array2;
 
 fn run() -> Result<()> {
-    let params = support::parse_syncbox_args(std::env::args())?;
+    let params =
+        support::SyncboxArgs::try_from(std::env::args().collect::<Vec<_>>())?.into_params()?;
     let board_id = BoardId::MINDROVE_SYNCBOX_BOARD;
 
     let mut boards: Vec<(MindRoveInputParams, BoardShim)> = Vec::with_capacity(params.len());
     for entry in params {
         let mut board = BoardShim::new(board_id, entry.clone())?;
-        if let Err(err) = prepare_and_start(&mut board) {
-            tracing::error!(target: "mindrove", error = %err, "failed to prepare and start board");
+        if let Err(err) = start_board(&mut board) {
+            tracing::error!(target: "mindrove", error = %err, "failed to start board");
         }
         boards.push((entry, board));
     }
@@ -21,7 +22,7 @@ fn run() -> Result<()> {
     std::thread::sleep(Duration::from_secs(5));
 
     for (params, board) in boards.iter_mut() {
-        match stop_get_release(board) {
+        match stop_and_get(board) {
             Ok(data) => {
                 println!(
                     "Data from board with mac_address: {} or idx (ip_port): {}",
@@ -30,7 +31,7 @@ fn run() -> Result<()> {
                 println!("{data}");
             }
             Err(err) => {
-                tracing::error!(target: "mindrove", error = %err, "failed to stop, get data, and release board");
+                tracing::error!(target: "mindrove", error = %err, "failed to stop and get data");
             }
         }
     }
@@ -38,16 +39,14 @@ fn run() -> Result<()> {
     Ok(())
 }
 
-fn prepare_and_start(board: &mut BoardShim) -> Result<()> {
-    board.prepare_session()?;
+fn start_board(board: &mut BoardShim) -> Result<()> {
     board.start_stream()?;
     Ok(())
 }
 
-fn stop_get_release(board: &mut BoardShim) -> Result<Array2<f64>> {
+fn stop_and_get(board: &mut BoardShim) -> Result<Array2<f64>> {
     board.stop_stream()?;
     let data = board.get_current_board_data(10)?;
-    board.release_session()?;
     Ok(data)
 }
 

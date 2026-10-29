@@ -18,7 +18,7 @@
 - Linux implementation uses a pipe and `/proc/self/fd/<write-fd>`; unsupported platforms compile without blocking the crate.
 - Bridge initialization is once per process, shared by all boards, and gracefully degrades with one `target: "mindrove"` warning.
 - No Tokio or async runtime.
-- Preserve existing public SDK logger controls unless a direct bridge integration requires an internal adjustment; do not redesign unrelated APIs.
+- Keep vendor logger controls private to the tracing bridge; do not expose public SDK logger controls or redesign unrelated APIs.
 
 ---
 

@@ -7,16 +7,15 @@ use mindrove::{BoardShim, DataFilter, MLModel};
 fn main() -> mindrove::Result<()> {
     support::init_tracing();
 
-    let (board_id, input_params, model_params) = support::parse_model_args(std::env::args())?;
+    let (board_id, input_params, model_params) =
+        support::ModelArgs::try_from(std::env::args().collect::<Vec<_>>())?.into_parts()?;
     let mut board = BoardShim::new(board_id, input_params)?;
-    board.prepare_session()?;
     let master_board_id = board.get_board_id()?;
     board.start_stream()?;
     std::thread::sleep(Duration::from_secs(5));
     board.stop_stream()?;
 
     let data = board.get_board_data()?;
-    board.release_session()?;
     println!("{data}");
 
     let sampling_rate = BoardShim::get_sampling_rate(master_board_id)?;

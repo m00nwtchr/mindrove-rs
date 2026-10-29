@@ -69,20 +69,6 @@ pub(crate) fn board_version(buffer: *mut c_char, len: *mut i32, max_len: i32) ->
     unsafe { mindrove_sys::get_version_board_controller(buffer, len, max_len) }
 }
 
-pub(crate) fn logger_call(kind: u8, value: i32, text: *mut c_char) -> i32 {
-    unsafe {
-        match kind {
-            0 => mindrove_sys::set_log_level_board_controller(value),
-            1 => mindrove_sys::log_message_board_controller(value, text),
-            _ => unreachable!(),
-        }
-    }
-}
-
-pub(crate) fn set_log_file(path: *const c_char) -> i32 {
-    unsafe { mindrove_sys::set_log_file_board_controller(path) }
-}
-
 /// Raw status-returning wrapper around `set_log_file_board_controller`.
 ///
 /// Used exclusively by the internal vendor logging bridge during one-time
@@ -99,10 +85,6 @@ pub(crate) fn set_log_file_raw(path: *const c_char) -> i32 {
 /// recurse into `ensure_logging_bridge`.
 pub(crate) fn set_log_level_raw(level: i32) -> i32 {
     unsafe { mindrove_sys::set_log_level_board_controller(level) }
-}
-
-pub(crate) fn release_all_sessions() -> i32 {
-    unsafe { mindrove_sys::release_all_sessions() }
 }
 
 pub(crate) fn prepare_session(board_id: i32, params: *const c_char) -> i32 {

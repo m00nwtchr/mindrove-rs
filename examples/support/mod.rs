@@ -1,5 +1,6 @@
-#![allow(dead_code)] // Cargo compiles this shared support module separately into each example, so parser entry points unused by that binary are intentional.
+#![allow(dead_code)]
 
+use clap::{Args, Parser};
 use mindrove::{
     BoardId, Error, IpProtocolType, MindRoveClassifier, MindRoveInputParams, MindRoveMetric,
     MindRoveModelParams, Result,
@@ -9,229 +10,322 @@ pub(crate) fn init_tracing() {
     tracing_subscriber::fmt::init();
 }
 
-pub fn parse_board_args<I, S>(args: I) -> Result<(BoardId, MindRoveInputParams)>
-where
-    I: IntoIterator<Item = S>,
-    S: Into<String>,
-{
-    let args = collect_args(args);
-    let (board_id, params, _) = parse_input_args(&args, true)?;
-    Ok((
-        board_id.ok_or_else(|| invalid("missing required --board-id"))?,
-        params,
-    ))
+pub struct BoardArgs {
+    input: InputArgs,
 }
 
-pub fn parse_model_args<I, S>(
-    args: I,
-) -> Result<(BoardId, MindRoveInputParams, MindRoveModelParams)>
-where
-    I: IntoIterator<Item = S>,
-    S: Into<String>,
-{
-    let args = collect_args(args);
-    let mut input_args = Vec::new();
-    let mut model = MindRoveModelParams::default();
-    let mut classifier = false;
-    let mut metric = false;
-    let mut index = 0;
+impl TryFrom<Vec<String>> for BoardArgs {
+    type Error = Error;
 
-    while index < args.len() {
-        match args[index].as_str() {
-            "--classifier" => {
-                model.classifier = parse_classifier(value(&args, &mut index, "--classifier")?)?;
-                classifier = true;
-            }
-            "--metric" => {
-                model.metric = parse_metric(value(&args, &mut index, "--metric")?)?;
-                metric = true;
-            }
-            "--model-file" => {
-                model.file = value(&args, &mut index, "--model-file")?;
-            }
-            "--output-name" => {
-                model.output_name = value(&args, &mut index, "--output-name")?;
-            }
-            _ => input_args.push(args[index].clone()),
+    fn try_from(args: Vec<String>) -> Result<Self> {
+        let parsed = parse::<BoardCli>(args)?;
+        if parsed.input.board_id.is_none() {
+            return Err(invalid("missing required --board-id"));
         }
-        index += 1;
+        Ok(Self {
+            input: parsed.input,
+        })
     }
-
-    let (board_id, params, _) = parse_input_args(&input_args, true)?;
-    let board_id = board_id.ok_or_else(|| invalid("missing required --board-id"))?;
-    if !classifier {
-        return Err(invalid("missing required --classifier"));
-    }
-    if !metric {
-        return Err(invalid("missing required --metric"));
-    }
-    Ok((board_id, params, model))
 }
 
-pub fn parse_syncbox_args<I, S>(args: I) -> Result<Vec<MindRoveInputParams>>
-where
-    I: IntoIterator<Item = S>,
-    S: Into<String>,
-{
-    let args = collect_args(args);
-    let mut mac_addresses = Vec::new();
-    let mut ip_ports = Vec::new();
-    let mut timeouts = Vec::new();
-    let mut common = Vec::new();
-    let mut index = 0;
-
-    while index < args.len() {
-        match args[index].as_str() {
-            "--mac-address" => {
-                mac_addresses.push(value(&args, &mut index, "--mac-address")?);
-            }
-            "--ip-port" => {
-                ip_ports.push(parse_i32(
-                    value(&args, &mut index, "--ip-port")?,
-                    "--ip-port",
-                )?);
-            }
-            "--timeout" => {
-                timeouts.push(parse_i32(
-                    value(&args, &mut index, "--timeout")?,
-                    "--timeout",
-                )?);
-            }
-            _ => common.push(args[index].clone()),
-        }
-        index += 1;
+impl BoardArgs {
+    pub fn into_parts(self) -> Result<(BoardId, MindRoveInputParams)> {
+        let board_id = self
+            .input
+            .board_id
+            .ok_or_else(|| invalid("missing required --board-id"))?;
+        Ok((BoardId::from_raw(board_id), self.input.into_params()))
     }
-
-    if mac_addresses.is_empty() && ip_ports.is_empty() {
-        return Err(invalid(
-            "at least one of --mac-address or --ip-port is required",
-        ));
-    }
-
-    let (board_id, defaults, _) = parse_input_args(&common, false)?;
-    let count = mac_addresses.len().max(ip_ports.len()).max(timeouts.len());
-    let mut entries = Vec::with_capacity(count);
-    for entry in 0..count {
-        let mut params = defaults.clone();
-        if let Some(mac) = mac_addresses.get(entry) {
-            params.mac_address = mac.clone();
-        }
-        if let Some(port) = ip_ports.get(entry) {
-            params.ip_port = *port;
-        }
-        if let Some(timeout) = timeouts.get(entry) {
-            params.timeout = *timeout;
-        }
-        if let Some(board_id) = board_id {
-            params.master_board = board_id;
-        }
-        entries.push(params);
-    }
-    Ok(entries)
 }
 
-fn collect_args<I, S>(args: I) -> Vec<String>
+pub struct ModelArgs {
+    input: InputArgs,
+    classifier: MindRoveClassifier,
+    metric: MindRoveMetric,
+    model_file: String,
+    output_name: String,
+}
+
+impl TryFrom<Vec<String>> for ModelArgs {
+    type Error = Error;
+
+    fn try_from(args: Vec<String>) -> Result<Self> {
+        let parsed = parse::<ModelCli>(args)?;
+        if parsed.input.board_id.is_none() {
+            return Err(invalid("missing required --board-id"));
+        }
+        Ok(Self {
+            input: parsed.input,
+            classifier: parsed.classifier,
+            metric: parsed.metric,
+            model_file: parsed.model_file,
+            output_name: parsed.output_name,
+        })
+    }
+}
+
+impl ModelArgs {
+    pub fn into_parts(self) -> Result<(BoardId, MindRoveInputParams, MindRoveModelParams)> {
+        let board_id = self
+            .input
+            .board_id
+            .ok_or_else(|| invalid("missing required --board-id"))?;
+        let model = MindRoveModelParams {
+            classifier: self.classifier,
+            metric: self.metric,
+            file: self.model_file,
+            output_name: self.output_name,
+            ..Default::default()
+        };
+        Ok((BoardId::from_raw(board_id), self.input.into_params(), model))
+    }
+}
+
+pub struct SyncboxArgs {
+    input: SyncboxInputArgs,
+    mac_addresses: Vec<String>,
+    ip_ports: Vec<i32>,
+    timeouts: Vec<i32>,
+}
+
+impl TryFrom<Vec<String>> for SyncboxArgs {
+    type Error = Error;
+
+    fn try_from(args: Vec<String>) -> Result<Self> {
+        let parsed = parse::<SyncboxCli>(args)?;
+        if parsed.mac_addresses.is_empty() && parsed.ip_ports.is_empty() {
+            return Err(invalid(
+                "at least one of --mac-address or --ip-port is required",
+            ));
+        }
+        Ok(Self {
+            input: parsed.input,
+            mac_addresses: parsed.mac_addresses,
+            ip_ports: parsed.ip_ports,
+            timeouts: parsed.timeouts,
+        })
+    }
+}
+
+impl SyncboxArgs {
+    pub fn into_params(self) -> Result<Vec<MindRoveInputParams>> {
+        let parsed = self;
+        let count = parsed
+            .mac_addresses
+            .len()
+            .max(parsed.ip_ports.len())
+            .max(parsed.timeouts.len());
+        let mut entries = Vec::with_capacity(count);
+        for index in 0..count {
+            let mut params = parsed.input.clone().into_params();
+            if let Some(mac) = parsed.mac_addresses.get(index) {
+                params.mac_address = mac.clone();
+            }
+            if let Some(port) = parsed.ip_ports.get(index) {
+                params.ip_port = *port;
+            }
+            if let Some(timeout) = parsed.timeouts.get(index) {
+                params.timeout = *timeout;
+            }
+            if let Some(board_id) = parsed.input.board_id {
+                params.master_board = BoardId::from_raw(board_id);
+            }
+            entries.push(params);
+        }
+        Ok(entries)
+    }
+}
+
+fn parse<T>(args: Vec<String>) -> Result<T>
 where
-    I: IntoIterator<Item = S>,
-    S: Into<String>,
+    T: Parser,
 {
-    let args: Vec<String> = args.into_iter().map(Into::into).collect();
-    if args.first().is_some_and(|arg| !arg.starts_with('-')) {
-        args.into_iter().skip(1).collect()
-    } else {
+    let args = if args.first().is_some_and(|arg| !arg.starts_with('-')) {
         args
-    }
+    } else {
+        std::iter::once("example".to_owned()).chain(args).collect()
+    };
+    T::try_parse_from(args).map_err(|error| invalid(error.to_string()))
 }
 
-fn parse_input_args(
-    args: &[String],
-    require_board: bool,
-) -> Result<(Option<BoardId>, MindRoveInputParams, usize)> {
-    let mut board_id = None;
-    let mut params = MindRoveInputParams::default();
-    let mut index = 0;
-    while index < args.len() {
-        let flag = args[index].as_str();
-        match flag {
-            "--board-id" => {
-                board_id = Some(BoardId::from_raw(parse_i32(
-                    value(args, &mut index, flag)?,
-                    flag,
-                )?))
-            }
-            "--ip-address" => params.ip_address = value(args, &mut index, flag)?,
-            "--ip-address-aux" => params.ip_address_aux = value(args, &mut index, flag)?,
-            "--ip-address-anc" => params.ip_address_anc = value(args, &mut index, flag)?,
-            "--ip-port" => params.ip_port = parse_i32(value(args, &mut index, flag)?, flag)?,
-            "--ip-port-aux" => {
-                params.ip_port_aux = parse_i32(value(args, &mut index, flag)?, flag)?
-            }
-            "--ip-port-anc" => {
-                params.ip_port_anc = parse_i32(value(args, &mut index, flag)?, flag)?
-            }
-            "--serial-port" => params.serial_port = value(args, &mut index, flag)?,
-            "--ip-protocol" => {
-                params.ip_protocol = parse_protocol(value(args, &mut index, flag)?, flag)?
-            }
-            "--timeout" => params.timeout = parse_i32(value(args, &mut index, flag)?, flag)?,
-            "--other-info" => params.other_info = value(args, &mut index, flag)?,
-            "--mac-address" => params.mac_address = value(args, &mut index, flag)?,
-            "--serial-number" => params.serial_number = value(args, &mut index, flag)?,
-            "--file" => params.file = value(args, &mut index, flag)?,
-            "--file-aux" => params.file_aux = value(args, &mut index, flag)?,
-            "--file-anc" => params.file_anc = value(args, &mut index, flag)?,
-            "--master-board" => {
-                params.master_board =
-                    BoardId::from_raw(parse_i32(value(args, &mut index, flag)?, flag)?)
-            }
-            _ => return Err(invalid(format!("unknown argument {flag}"))),
+#[derive(Debug, Args)]
+struct InputArgs {
+    #[arg(long)]
+    board_id: Option<i32>,
+    #[arg(long, default_value = "")]
+    ip_address: String,
+    #[arg(long, default_value = "")]
+    ip_address_aux: String,
+    #[arg(long, default_value = "")]
+    ip_address_anc: String,
+    #[arg(long, default_value_t = -1)]
+    ip_port: i32,
+    #[arg(long, default_value_t = 0)]
+    ip_port_aux: i32,
+    #[arg(long, default_value_t = 0)]
+    ip_port_anc: i32,
+    #[arg(long, value_parser = parse_protocol, default_value = "0")]
+    ip_protocol: IpProtocolType,
+    #[arg(long, default_value = "")]
+    other_info: String,
+    #[arg(long, default_value_t = 0)]
+    timeout: i32,
+    #[arg(long, default_value = "")]
+    serial_port: String,
+    #[arg(long, default_value = "")]
+    mac_address: String,
+    #[arg(long, default_value = "")]
+    serial_number: String,
+    #[arg(long, default_value = "")]
+    file: String,
+    #[arg(long, default_value = "")]
+    file_aux: String,
+    #[arg(long, default_value = "")]
+    file_anc: String,
+    #[arg(long)]
+    master_board: Option<i32>,
+}
+
+impl InputArgs {
+    fn into_params(self) -> MindRoveInputParams {
+        MindRoveInputParams {
+            serial_port: self.serial_port,
+            mac_address: self.mac_address,
+            ip_address: self.ip_address,
+            ip_address_aux: self.ip_address_aux,
+            ip_address_anc: self.ip_address_anc,
+            ip_port: self.ip_port,
+            ip_port_aux: self.ip_port_aux,
+            ip_port_anc: self.ip_port_anc,
+            ip_protocol: self.ip_protocol,
+            other_info: self.other_info,
+            timeout: self.timeout,
+            serial_number: self.serial_number,
+            file: self.file,
+            file_aux: self.file_aux,
+            file_anc: self.file_anc,
+            master_board: self
+                .master_board
+                .map(BoardId::from_raw)
+                .unwrap_or(BoardId::NO_BOARD),
         }
-        index += 1;
     }
-    if require_board && board_id.is_none() {
-        return Err(invalid("missing required --board-id"));
+}
+
+#[derive(Debug, Parser)]
+struct BoardCli {
+    #[command(flatten)]
+    input: InputArgs,
+}
+
+#[derive(Debug, Parser)]
+struct ModelCli {
+    #[command(flatten)]
+    input: InputArgs,
+    #[arg(long, value_parser = parse_classifier)]
+    classifier: MindRoveClassifier,
+    #[arg(long, value_parser = parse_metric)]
+    metric: MindRoveMetric,
+    #[arg(long, default_value = "")]
+    model_file: String,
+    #[arg(long, default_value = "")]
+    output_name: String,
+}
+
+#[derive(Debug, Parser)]
+struct SyncboxCli {
+    #[command(flatten)]
+    input: SyncboxInputArgs,
+    #[arg(long = "mac-address", action = clap::ArgAction::Append)]
+    mac_addresses: Vec<String>,
+    #[arg(long = "ip-port", action = clap::ArgAction::Append)]
+    ip_ports: Vec<i32>,
+    #[arg(long = "timeout", action = clap::ArgAction::Append)]
+    timeouts: Vec<i32>,
+}
+
+#[derive(Debug, Args, Clone)]
+struct SyncboxInputArgs {
+    #[arg(long)]
+    board_id: Option<i32>,
+    #[arg(long, default_value = "")]
+    ip_address: String,
+    #[arg(long, default_value = "")]
+    ip_address_aux: String,
+    #[arg(long, default_value = "")]
+    ip_address_anc: String,
+    #[arg(long, default_value_t = 0)]
+    ip_port_aux: i32,
+    #[arg(long, default_value_t = 0)]
+    ip_port_anc: i32,
+    #[arg(long, value_parser = parse_protocol, default_value = "0")]
+    ip_protocol: IpProtocolType,
+    #[arg(long, default_value = "")]
+    other_info: String,
+    #[arg(long, default_value = "")]
+    serial_port: String,
+    #[arg(long, default_value = "")]
+    serial_number: String,
+    #[arg(long, default_value = "")]
+    file: String,
+    #[arg(long, default_value = "")]
+    file_aux: String,
+    #[arg(long, default_value = "")]
+    file_anc: String,
+    #[arg(long)]
+    master_board: Option<i32>,
+}
+
+impl SyncboxInputArgs {
+    fn into_params(self) -> MindRoveInputParams {
+        MindRoveInputParams {
+            serial_port: self.serial_port,
+            mac_address: String::new(),
+            ip_address: self.ip_address,
+            ip_address_aux: self.ip_address_aux,
+            ip_address_anc: self.ip_address_anc,
+            ip_port: -1,
+            ip_port_aux: self.ip_port_aux,
+            ip_port_anc: self.ip_port_anc,
+            ip_protocol: self.ip_protocol,
+            other_info: self.other_info,
+            timeout: 0,
+            serial_number: self.serial_number,
+            file: self.file,
+            file_aux: self.file_aux,
+            file_anc: self.file_anc,
+            master_board: self
+                .master_board
+                .map(BoardId::from_raw)
+                .unwrap_or(BoardId::NO_BOARD),
+        }
     }
-    Ok((board_id, params, index))
 }
 
-fn value(args: &[String], index: &mut usize, flag: &str) -> Result<String> {
-    *index += 1;
-    args.get(*index)
-        .filter(|value| !value.starts_with("--"))
-        .cloned()
-        .ok_or_else(|| invalid(format!("missing value for {flag}")))
-}
-
-fn parse_i32(value: String, flag: &str) -> Result<i32> {
-    value
-        .parse()
-        .map_err(|_| invalid(format!("invalid value for {flag}: {value}")))
-}
-
-fn parse_protocol(value: String, flag: &str) -> Result<IpProtocolType> {
-    match parse_i32(value, flag)? {
+fn parse_protocol(value: &str) -> std::result::Result<IpProtocolType, String> {
+    match value.parse::<i32>().map_err(|_| value.to_owned())? {
         0 => Ok(IpProtocolType::NO_IP_PROTOCOL),
         1 => Ok(IpProtocolType::UDP),
         2 => Ok(IpProtocolType::TCP),
-        _ => Err(invalid(format!("invalid value for {flag}"))),
+        _ => Err(value.to_owned()),
     }
 }
 
-fn parse_classifier(value: String) -> Result<MindRoveClassifier> {
-    match parse_i32(value, "--classifier")? {
+fn parse_classifier(value: &str) -> std::result::Result<MindRoveClassifier, String> {
+    match value.parse::<i32>().map_err(|_| value.to_owned())? {
         0 => Ok(MindRoveClassifier::DEFAULT_CLASSIFIER),
         1 => Ok(MindRoveClassifier::DYN_LIB_CLASSIFIER),
         2 => Ok(MindRoveClassifier::ONNX_CLASSIFIER),
-        _ => Err(invalid("invalid value for --classifier")),
+        _ => Err(value.to_owned()),
     }
 }
 
-fn parse_metric(value: String) -> Result<MindRoveMetric> {
-    match parse_i32(value, "--metric")? {
+fn parse_metric(value: &str) -> std::result::Result<MindRoveMetric, String> {
+    match value.parse::<i32>().map_err(|_| value.to_owned())? {
         0 => Ok(MindRoveMetric::MINDFULNESS),
         1 => Ok(MindRoveMetric::RESTFULNESS),
         2 => Ok(MindRoveMetric::USER_DEFINED),
-        _ => Err(invalid("invalid value for --metric")),
+        _ => Err(value.to_owned()),
     }
 }
 
@@ -241,7 +335,7 @@ fn invalid(message: impl Into<String>) -> Error {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_board_args, parse_model_args, parse_syncbox_args};
+    use super::{BoardArgs, ModelArgs, SyncboxArgs};
     use mindrove::{
         BoardId, IpProtocolType, MindRoveClassifier, MindRoveInputParams, MindRoveMetric,
     };
@@ -261,9 +355,11 @@ mod tests {
             "--master-board",
             "7",
         ];
-
-        let (board_id, params) = parse_board_args(args.into_iter()).unwrap();
-
+        let (board_id, params) =
+            BoardArgs::try_from(args.iter().map(ToString::to_string).collect::<Vec<_>>())
+                .unwrap()
+                .into_parts()
+                .unwrap();
         assert_eq!(board_id, BoardId::from_raw(42));
         assert_eq!(params.ip_address, "192.0.2.1");
         assert_eq!(params.ip_port_aux, 6670);
@@ -278,9 +374,10 @@ mod tests {
 
     #[test]
     fn rejects_missing_flag_value() {
-        let error = parse_board_args(["get_data", "--board-id"].into_iter()).unwrap_err();
-
-        assert!(matches!(error, mindrove::Error::InvalidArgument(_)));
+        assert!(matches!(
+            BoardArgs::try_from(vec!["get_data".to_owned(), "--board-id".to_owned()]),
+            Err(mindrove::Error::InvalidArgument(_))
+        ));
     }
 
     #[test]
@@ -298,9 +395,11 @@ mod tests {
             "--output-name",
             "score",
         ];
-
-        let (board_id, input, model) = parse_model_args(args.into_iter()).unwrap();
-
+        let (board_id, input, model) =
+            ModelArgs::try_from(args.iter().map(ToString::to_string).collect::<Vec<_>>())
+                .unwrap()
+                .into_parts()
+                .unwrap();
         assert_eq!(board_id, BoardId::from_raw(1));
         assert_eq!(input, MindRoveInputParams::default());
         assert_eq!(model.classifier, MindRoveClassifier::ONNX_CLASSIFIER);
@@ -317,7 +416,7 @@ mod tests {
             vec!["eeg_metrics_ci", "--board-id", "1", "--classifier", "0"],
         ] {
             assert!(matches!(
-                parse_model_args(args.into_iter()),
+                ModelArgs::try_from(args.iter().map(ToString::to_string).collect::<Vec<_>>()),
                 Err(mindrove::Error::InvalidArgument(_))
             ));
         }
@@ -340,9 +439,11 @@ mod tests {
             "--timeout",
             "2000",
         ];
-
-        let entries = parse_syncbox_args(args.into_iter()).unwrap();
-
+        let entries =
+            SyncboxArgs::try_from(args.iter().map(ToString::to_string).collect::<Vec<_>>())
+                .unwrap()
+                .into_params()
+                .unwrap();
         assert_eq!(entries.len(), 2);
         assert_eq!(entries[0].mac_address, "AA:BB");
         assert_eq!(entries[0].ip_port, 6670);
@@ -355,7 +456,7 @@ mod tests {
     #[test]
     fn syncbox_parser_requires_mac_or_ip_port() {
         assert!(matches!(
-            parse_syncbox_args(["syncbox_get_data"].into_iter()),
+            SyncboxArgs::try_from(vec!["syncbox_get_data".to_owned()]),
             Err(mindrove::Error::InvalidArgument(_))
         ));
     }

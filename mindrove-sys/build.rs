@@ -51,7 +51,41 @@ fn sdk_asset(target: &str) -> SdkAsset {
     }
 }
 
-fn main() {
+fn prepare_shim() {
+    let manifest_dir =
+        PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR"));
+    let out_dir = PathBuf::from(env::var_os("OUT_DIR").expect("OUT_DIR"));
+
+    let source = manifest_dir.join("shim.c");
+    let library = out_dir.join("libmindrove_scope.so");
+
+    println!("cargo:rerun-if-changed={}", source.display());
+    println!("cargo:rerun-if-env-changed=CC");
+    println!("cargo:rerun-if-env-changed=CFLAGS");
+
+    // Respect Cargo's target/compiler configuration and the CC environment.
+    let compiler = cc::Build::new().file(&source).pic(true).get_compiler();
+
+    let mut command = compiler.to_command();
+    command
+        .arg("-shared")
+        .arg("-fPIC")
+        .arg("-Wl,-soname,libmindrove_scope.so")
+        .arg("-o")
+        .arg(&library)
+        .arg(&source)
+        .arg("-lsystemd");
+
+    let status = command.status().expect("failed to execute C compiler");
+
+    assert!(status.success(), "failed to build {}", library.display());
+
+    // Make the shared object available to the Rust linker.
+    println!("cargo:rustc-link-search=native={}", out_dir.display());
+    println!("cargo:rustc-link-lib=dylib=mindrove_scope");
+}
+
+fn prepare_sdk() {
     println!("cargo:rerun-if-env-changed=MINDROVE_SDK_DIR");
     println!("cargo:rerun-if-changed=wrapper.h");
 
@@ -92,6 +126,11 @@ fn main() {
     bindings
         .write_to_file(out_path)
         .expect("Couldn't write bindings!");
+}
+
+fn main() {
+    prepare_shim();
+    prepare_sdk();
 }
 
 fn get_sdk(target: &str, host: &str, asset: &SdkAsset) -> PathBuf {

@@ -6,7 +6,6 @@ fn main() -> Result<()> {
     support::init_tracing();
 
     let mut board = BoardShim::new(BoardId::SYNTHETIC_BOARD, MindRoveInputParams::default())?;
-    board.prepare_session()?;
 
     board.add_streamer("file://streamer_default_1.csv:w")?;
     board.add_streamer("file://streamer_default_2.csv:w")?;
@@ -31,6 +30,5 @@ fn main() -> Result<()> {
     std::thread::sleep(std::time::Duration::from_secs(5));
 
     board.stop_stream()?;
-    board.release_session()?;
     Ok(())
 }

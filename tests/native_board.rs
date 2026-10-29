@@ -15,7 +15,7 @@ fn native_test_lock() -> std::sync::MutexGuard<'static, ()> {
 fn running_synthetic_board() -> BoardShim {
     let mut board =
         BoardShim::new(BoardId::SYNTHETIC_BOARD, MindRoveInputParams::default()).unwrap();
-    board.prepare_session().unwrap();
+    assert!(board.is_prepared().unwrap());
     board.start_stream().unwrap();
     std::thread::sleep(std::time::Duration::from_millis(100));
     board
@@ -32,7 +32,6 @@ fn synthetic_board_returns_channel_sample_data() {
     );
     assert!(data.ncols() <= 2);
     board.stop_stream().unwrap();
-    board.release_session().unwrap();
 }
 
 #[test]
@@ -47,7 +46,6 @@ fn synthetic_board_reads_available_data_count_and_prefix() {
     );
     assert!(data.ncols() <= count);
     board.stop_stream().unwrap();
-    board.release_session().unwrap();
 }
 
 #[test]
@@ -55,7 +53,5 @@ fn synthetic_board_reports_id_and_failed_cleanup_is_safe() {
     let _lock = native_test_lock();
     let board = BoardShim::new(BoardId::SYNTHETIC_BOARD, MindRoveInputParams::default()).unwrap();
     assert_eq!(board.get_board_id().unwrap(), BoardId::SYNTHETIC_BOARD);
-    let mut board =
-        BoardShim::new(BoardId::from_raw(12345), MindRoveInputParams::default()).unwrap();
-    assert!(board.prepare_session().is_err());
+    assert!(BoardShim::new(BoardId::from_raw(12345), MindRoveInputParams::default()).is_err());
 }

@@ -5,10 +5,10 @@ use mindrove::{BoardShim, Result};
 fn main() -> Result<()> {
     support::init_tracing();
 
-    let (board_id, params) = support::parse_board_args(std::env::args())?;
+    let (board_id, params) =
+        support::BoardArgs::try_from(std::env::args().collect::<Vec<_>>())?.into_parts()?;
 
     let mut board = BoardShim::new(board_id, params)?;
-    board.prepare_session()?;
     board.start_stream()?;
 
     for marker in 1..=4 {
@@ -18,7 +18,6 @@ fn main() -> Result<()> {
 
     board.stop_stream()?;
     let data = board.get_board_data()?;
-    board.release_session()?;
     println!("{data}");
     Ok(())
 }

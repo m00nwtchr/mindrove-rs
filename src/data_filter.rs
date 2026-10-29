@@ -3,9 +3,8 @@ use num_complex::Complex;
 
 use crate::internal;
 use crate::{
-    AggOperation, DetrendOperation, Error, FilterType, LogLevel, NoiseEstimationLevelType,
-    NoiseType, Result, ThresholdType, WaveletDenoisingType, WaveletExtensionType, WaveletType,
-    WindowOperation,
+    AggOperation, DetrendOperation, Error, FilterType, NoiseEstimationLevelType, NoiseType, Result,
+    ThresholdType, WaveletDenoisingType, WaveletExtensionType, WaveletType, WindowOperation,
 };
 
 pub const DEFAULT_OXYGEN_COEFS: (f64, f64, f64) = (1.5958422, -34.6596622, 112.6898759);
@@ -97,42 +96,6 @@ pub struct IcaResult {
 pub struct DataFilter;
 
 impl DataFilter {
-    pub fn set_log_level(level: LogLevel) -> Result<()> {
-        internal::ensure_logging_bridge();
-        internal::check_status(internal::data_filter_log_level(level as i32))
-    }
-
-    pub fn enable_data_logger() -> Result<()> {
-        Self::set_log_level(LogLevel::LEVEL_INFO)
-    }
-
-    pub fn disable_data_logger() -> Result<()> {
-        Self::set_log_level(LogLevel::LEVEL_OFF)
-    }
-
-    pub fn enable_dev_data_logger() -> Result<()> {
-        Self::set_log_level(LogLevel::LEVEL_TRACE)
-    }
-
-    pub fn set_log_file(path: &str) -> Result<()> {
-        // See `BoardShim::set_log_file` for the rationale: ensure the
-        // bridge is initialised before the explicit log file override
-        // so the caller's configuration wins.
-        internal::ensure_logging_bridge();
-        let path = internal::to_cstring(path)?;
-        internal::check_status(internal::data_filter_log_file(path.as_ptr()))
-    }
-
-    pub fn log_message(level: LogLevel, message: &str) -> Result<()> {
-        // See `BoardShim::set_log_file` for the rationale.
-        internal::ensure_logging_bridge();
-        let mut message = internal::to_cstring(message)?.into_bytes_with_nul();
-        internal::check_status(internal::data_filter_log_message(
-            level as i32,
-            message.as_mut_ptr().cast(),
-        ))
-    }
-
     pub fn get_version() -> Result<String> {
         internal::ensure_logging_bridge();
         const VERSION_BUFFER_LEN: i32 = 64;
