@@ -10,7 +10,7 @@ The official-style synthetic board example uses the safe lifecycle API and
 relies on the `BoardShim`'s RAII `Drop` for release:
 
 ```sh
-LD_LIBRARY_PATH="$PWD/mindrove-sys/sdk/lib" cargo run --example synthetic_acquisition --features native-tests
+cargo run --example synthetic_acquisition --features native-tests
 ```
 
 The board data returned by `get_current_board_data` is an `Array2<f64>` whose
@@ -35,15 +35,15 @@ and other native tests additionally require the vendored Linux runtime. Run the
 full native test target with:
 
 ```sh
-LD_LIBRARY_PATH="$PWD/mindrove-sys/sdk/lib" cargo test --all-targets --features native-tests
+cargo test --all-targets --features native-tests
 ```
 
-If the SDK cannot find `libstdc++.so.6`, include the directory containing the
-system library as well:
+<!-- If the SDK cannot find `libstdc++.so.6`, include the directory containing the -->
+<!-- system library as well: -->
 
-```sh
-LIBSTDCPP=$(gcc -print-file-name=libstdc++.so.6); LD_LIBRARY_PATH="$PWD/mindrove-sys/sdk/lib:$(dirname "$LIBSTDCPP")" cargo test --all-targets --features native-tests -- --nocapture
-```
+<!-- ```sh -->
+<!-- LIBSTDCPP=$(gcc -print-file-name=libstdc++.so.6) cargo test --all-targets --features native-tests -- --nocapture -->
+<!-- ``` -->
 
 The native ML lifecycle test uses `MINDROVE_MODEL_PATH` when it is set. Without
 that variable, only that ML test skips because the model asset is unavailable;
